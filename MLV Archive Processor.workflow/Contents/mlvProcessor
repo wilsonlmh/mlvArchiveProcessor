@@ -1,0 +1,218 @@
+#!/bin/bash
+#Magic Lantern RAW copy&processing script
+#by Wilson Luniz @ Previous Production
+#credit: MLV Dump
+
+
+#=========================Define=========================
+storeDirStage1="$HOME/Library/Application Scripts"
+storeDirStage2="info.luniz.mlRawProcesser"
+storeDirectory="$storeDirStage1/$storeDirStage2"
+config="$storeDirectory/config"
+version="0.1r0004"
+mlvdump="$HOME/Library/Services/Compress MLV.workflow/Contents/mlv_dump"
+bitdepth=14
+mlvdumpArgs=""
+
+#=========================Clear vars=========================
+DCIM=""
+COPYTO=""
+COPYORG=0
+
+#=========================Auto Save=========================
+defaultCOPYTO="$HOME/Movies"
+defaultDCIM="/Volumes/EOS_DIGITAL"
+
+
+#=========================Functions=========================
+function writeChk() {
+echo $version > "$1" 2> /dev/null
+chk=$(<"$1") > /dev/null 2> /dev/null
+rm "$1" > /dev/null 2> /dev/null
+if [ "$chk" == "$version" ]; then
+return 0
+else
+return 1
+fi
+}
+
+function pathChk() {
+if [ -d "$1" ]; then
+return 0
+else
+return 1
+fi
+}
+
+function fileChk() {
+[ -f "$1" ] && return 0
+[ ! -f "$1" ] && return 1
+}
+
+#=========================Setup=========================
+cd "$storeDirStage1"
+mkdir -p $storeDirStage2
+if writeChk "$storeDirectory/__writeTest" ; then
+[ -f "$config" ] && source "$config" > /dev/null 2 > /dev/null
+fi
+
+if pathChk "$defaultDCIM"; then
+    echo > /dev/null
+else
+    defaultDCIM="/Volumes"
+fi
+
+if pathChk "$defaultCOPYTO"; then
+    echo > /dev/null
+else
+    defaultCOPYTO="$HOME"
+fi
+
+#=========================User Config=========================
+verify=1
+
+osascript -e 'display notification '"$@"' with title "Debug"'
+
+if [ ! -z "$@" ]; then
+    if pathChk $1; then
+        DCIM=$1
+    fi
+    if pathChk "$1"; then
+        DCIM="$1"
+    fi
+    if pathChk $@; then
+        DCIM=$@
+    fi
+    if pathChk "$@"; then
+        DCIM="$@"
+    fi
+fi
+
+if [ -z "$DCIM" ]; then
+
+    DCIM=$(osascript -e 'set resultFolder to (choose folder name with prompt "Select MLV(s) Folder" default location "'"$defaultDCIM"'") as text
+set resultFolder to POSIX path of resultFolder
+return resultFolder
+')
+fi
+
+if pathChk "$DCIM"; then
+echo > /dev/null
+else
+    verify=0
+fi
+
+if [ $verify == 1 ]; then
+    preCOPYTO=$(osascript -e 'set resultFolder to (choose folder name with prompt "Select Save Folder" default location "'"$defaultCOPYTO"'") as text
+set resultFolder to POSIX path of resultFolder
+return resultFolder')
+    preCOPYTO="${preCOPYTO%/}"
+    if writeChk "$preCOPYTO/__writeTest"; then
+        COPYTO="$preCOPYTO"
+    else
+        verify=0
+    fi
+fi
+
+
+if [ $verify == 1 ]; then
+    preCOPYORG=$(osascript -e 'set yn to (display dialog "What you want to do?\nIt will create exactly same folder structure from source folder\nEither copying and compression will overwrite exist MLV(s)\n\nOriginal MLV(s) will result in <destnation>/original/\nCompressed MLV(s) will result in <destnation>/compressed/" buttons {"Copy+Compress", "Compress Only", "Cacnel&Exit"} with icon caution)
+return yn')
+    [ "$preCOPYORG" == "button returned:Compress Only" ] && COPYORG=0
+    [ "$preCOPYORG" == "button returned:Copy+Compress" ] && COPYORG=1
+    [ "$preCOPYORG" == "button returned:Cacnel&Exit" ] && verify=0
+fi
+
+#=========================Save config for next time=========================
+if [ $verify == 1 ]; then
+    echo "defaultCOPYTO=\"$COPYTO\"" > "$config" 2> /dev/null
+    echo "defaultDCIM=\"$DCIM\"" >> "$config" 2> /dev/null
+fi
+
+#=========================Ready=========================
+[ $verify == 0 ] && osascript -e 'display notification "Operation cancelled" with title "MLV Archive Processor"'
+if [ $verify == 1 ]; then
+    
+    mkdir "$COPYTO/compressed" > /dev/null
+
+    cd "$DCIM"
+    find . -type d -exec mkdir -p "$COPYTO/compressed/{}" \;
+    MLV1=$(find . -type f -name '*.MLV')
+    arr=$(echo $MLV1 | tr ";" "\n")
+    totalMLVs=0
+    for item in $arr
+    do
+        totalMLVs=$((totalMLVs+1))
+    done
+
+    totalSize=$(find "$DCIM/"	 -name '*.MLV' -exec ls -l {} \; | awk '{ Total += $5} END { print Total }')
+    totalSize=$((totalSize*100/1024/1024))
+    osascript -e 'display notification "Start processing..." with title "MLV Archive Processor" subtitle "'$totalMLVs' MLV(s), Total Size: '"$(echo $totalSize | rev | cut -c 3- | rev).$(echo $totalSize | rev | cut -c -2 | rev)"'MB"'
+
+    
+
+#=========================Action!=========================
+
+    compressingCount=0
+    copyingCount=0
+
+    if [ $COPYORG == 1 ]; then
+
+        start=$(date +%s)
+
+        mkdir "$COPYTO/original" > /dev/null
+        find . -type d -exec mkdir -p "$COPYTO/original/{}" \;        
+
+        for item in $arr
+        do
+            copyingCount=$((copyingCount+1))
+            osascript -e 'display notification "Copying '"$copyingCount/$totalMLVs"'" with title "MLV Archive Processor"'
+            in=${item:2}
+            cp -f $in "$COPYTO/original/$in"
+            
+        done
+
+        end=$(date +%s)
+        copyTime=$(expr $end - $start)
+
+        osascript -e 'display notification "Copying all done" with title "MLV Archive Processor"'
+    fi
+
+
+    start=$(date +%s)
+    
+    for item in $arr
+    do
+        compressingCount=$((compressingCount+1))
+        in=${item:2}
+        echo $in
+        "$mlvdump" $mlvdumpArgs -x -c -b $bitdepth -o "$COPYTO/compressed/$in" $in &
+        
+        osascript -e 'display notification "Compressing '"$compressingCount/$totalMLVs"'" with title "MLV Archive Processor"'
+
+        bash_pid=$$
+        children=`ps -eo ppid | grep -w $bash_pid`
+        num_children=`echo $children | wc -w`
+
+        while (( $num_children > 5 )); do
+           sleep 2
+           bash_pid=$$
+           children=`ps -eo ppid | grep -w $bash_pid`
+           num_children=`echo $children | wc -w`
+        done
+    done
+    
+    wait
+
+    end=$(date +%s)
+    compressTime=$(expr $end - $start)
+    
+    if [ $COPYORG == 1 ]; then
+        osascript -e 'display notification "All done" with title "MLV Archive Processor" sound name "Bottle" subtitle "'"Compress Time: $compressTime""s, Copy Time: $copyTime"'s"'
+    else
+        osascript -e 'display notification "All done" with title "MLV Archive Processor" sound name "Bottle" subtitle "'"Compress Time: $compressTime"'s"'
+    fi
+fi
+
+
+
