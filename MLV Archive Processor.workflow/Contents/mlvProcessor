@@ -9,7 +9,7 @@ storeDirStage1="$HOME/Library/Application Scripts"
 storeDirStage2="info.luniz.mlRawProcesser"
 storeDirectory="$storeDirStage1/$storeDirStage2"
 config="$storeDirectory/config"
-version="0.1r0004"
+version="0.2r0002"
 mlvdump="$HOME/Library/Services/Compress MLV.workflow/Contents/mlv_dump"
 bitdepth=14
 mlvdumpArgs=""
@@ -20,9 +20,9 @@ COPYTO=""
 COPYORG=0
 
 #=========================Auto Save=========================
-defaultCOPYTO="$HOME/Movies"
-defaultDCIM="/Volumes/EOS_DIGITAL"
-
+pDefaultCOPYTO="$HOME/Movies"
+pDefaultDCIM="/Volumes"
+pDefaultCOPYORGTO="$HOME/Movies"
 
 #=========================Functions=========================
 function writeChk() {
@@ -59,19 +59,22 @@ fi
 if pathChk "$defaultDCIM"; then
     echo > /dev/null
 else
-    defaultDCIM="/Volumes"
+    defaultDCIM="$pDefaultDCIM"
 fi
 
 if pathChk "$defaultCOPYTO"; then
     echo > /dev/null
 else
-    defaultCOPYTO="$HOME"
+    defaultCOPYTO="$pDefaultCOPYTO"
 fi
 
+if pathChk "$defaultCOPYORGTO"; then
+    echo > /dev/null
+else
+    defaultCOPYORGTO="$pDefaultCOPYORGTO"
+fi
 #=========================User Config=========================
 verify=1
-
-osascript -e 'display notification '"$@"' with title "Debug"'
 
 if [ ! -z "$@" ]; then
     if pathChk $1; then
@@ -103,7 +106,7 @@ else
 fi
 
 if [ $verify == 1 ]; then
-    preCOPYTO=$(osascript -e 'set resultFolder to (choose folder name with prompt "Select Save Folder" default location "'"$defaultCOPYTO"'") as text
+    preCOPYTO=$(osascript -e 'set resultFolder to (choose folder name with prompt "Select Destination Folder" default location "'"$defaultCOPYTO"'") as text
 set resultFolder to POSIX path of resultFolder
 return resultFolder')
     preCOPYTO="${preCOPYTO%/}"
@@ -116,17 +119,36 @@ fi
 
 
 if [ $verify == 1 ]; then
-    preCOPYORG=$(osascript -e 'set yn to (display dialog "What you want to do?\nIt will create exactly same folder structure from source folder\nEither copying and compression will overwrite exist MLV(s)\n\nOriginal MLV(s) will result in <destnation>/original/\nCompressed MLV(s) will result in <destnation>/compressed/" buttons {"Copy+Compress", "Compress Only", "Cacnel&Exit"} with icon caution)
+    preCOPYORG=$(osascript -e 'set yn to (display dialog "What you want to do?\nIt will create exactly same folder structure from source folder\nEither copying and compression will overwrite exist MLV(s)\n\nCompressed MLV(s) will result in <destination>/compressed/" buttons {"Copy+Compress", "Compress Only", "Cacnel&Exit"} with icon caution)
 return yn')
     [ "$preCOPYORG" == "button returned:Compress Only" ] && COPYORG=0
     [ "$preCOPYORG" == "button returned:Copy+Compress" ] && COPYORG=1
     [ "$preCOPYORG" == "button returned:Cacnel&Exit" ] && verify=0
 fi
 
+if ([ $verify == 1 ] && [ $COPYORG == 1 ]); then
+    preCOPYORGTO=$(osascript -e 'set yn to (display dialog "Original MLV(s) -> <destination>/original/" buttons {"Select Folder", "OK", "Cacnel&Exit"} with icon caution)
+return yn')
+    [ "$preCOPYORGTO" == "button returned:Cacnel&Exit" ] && verify=0
+    if [ "$preCOPYORGTO" == "button returned:Select Folder" ]; then
+        preCOPYORGTO=$(osascript -e 'set resultFolder to (choose folder name with prompt "Select Destination Folder" default location "'"$defaultCOPYORGTO"'") as text
+set resultFolder to POSIX path of resultFolder
+return resultFolder')
+        preCOPYORGTO="${preCOPYORGTO%/}"
+        if writeChk "$preCOPYORGTO/__writeTest"; then
+            COPYORGTO="$preCOPYORGTO"
+        else
+            verify=0
+        fi
+    fi
+    [ "$preCOPYORGTO" == "button returned: OK" ] && COPYORGTO="$COPYTO/original"
+fi
+
 #=========================Save config for next time=========================
 if [ $verify == 1 ]; then
     echo "defaultCOPYTO=\"$COPYTO\"" > "$config" 2> /dev/null
     echo "defaultDCIM=\"$DCIM\"" >> "$config" 2> /dev/null
+    echo "defaultCOPYORGTO=\"$COPYORGTO\"" >> "$config" 2> /dev/null
 fi
 
 #=========================Ready=========================
@@ -160,15 +182,15 @@ if [ $verify == 1 ]; then
 
         start=$(date +%s)
 
-        mkdir "$COPYTO/original" > /dev/null
-        find . -type d -exec mkdir -p "$COPYTO/original/{}" \;        
+        mkdir -p "$COPYORGTO" > /dev/null
+        find . -type d -exec mkdir -p "$COPYORGTO/{}" \;        
 
         for item in $arr
         do
             copyingCount=$((copyingCount+1))
             osascript -e 'display notification "Copying '"$copyingCount/$totalMLVs"'" with title "MLV Archive Processor"'
             in=${item:2}
-            cp -f $in "$COPYTO/original/$in"
+            cp -f $in "$COPYORGTO/$in"
             
         done
 
@@ -213,6 +235,3 @@ if [ $verify == 1 ]; then
         osascript -e 'display notification "All done" with title "MLV Archive Processor" sound name "Bottle" subtitle "'"Compress Time: $compressTime"'s"'
     fi
 fi
-
-
-
