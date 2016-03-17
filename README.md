@@ -1,7 +1,7 @@
 # mlvArchiveProcessor
 Implement MLV Dump, GUI MLV RAW copying&amp;compression in a click
 
-![image](https://cloud.githubusercontent.com/assets/5100899/13857159/9d123bb0-ecb3-11e5-8e60-0710408d4dc7.png)
+![image](https://cloud.githubusercontent.com/assets/5100899/13857203/d879a2f6-ecb3-11e5-9712-0585f0a840db.png)
 
 
 ##Features
