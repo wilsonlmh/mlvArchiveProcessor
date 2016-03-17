@@ -1,6 +1,11 @@
 # mlvArchiveProcessor
 Implement MLV Dump, GUI MLV RAW copying&amp;compression in a click
 
+##Features
+ - Lossless compression
+ - Fast compression
+ - Easy&friendly
+
 ##Installation
 - Install `MLV Dump` (CompressMLV.dmg in https://bitbucket.org/dmilligan/mlvfs/downloads)
 - Install this app(`mlvArchiveProcessor`) workflow in OS X
